@@ -1,0 +1,55 @@
+name: Daily OpenBet ML Pipeline
+
+on:
+  schedule:
+    - cron: '0 10 * * *'
+  workflow_dispatch: 
+
+jobs:
+  update-data-and-predict:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10' 
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pandas scikit-learn kaggle requests joblib
+          # CHANGE 1: Look for requirements.txt inside the backend folder
+          if [ -f backend/requirements.txt ]; then pip install -r backend/requirements.txt; fi
+
+      - name: Download Latest Kaggle CSVs
+        env:
+          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+          KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
+        run: |
+          kaggle datasets download -d eoinamoore/historical-nba-data-and-player-box-scores --unzip -o
+          # CHANGE 2: Create the folder inside 'backend' so your scripts can see it
+          mkdir -p backend/data
+          mv *.csv backend/data/
+
+      - name: Run Prediction Scripts
+        # CHANGE 3: Tell GitHub to "step inside" the backend folder before running
+        working-directory: ./backend 
+        env:
+          ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
+        run: |
+          python update_history.py
+          python model_train.py
+          python player_model_train.py
+          python daily_update.py
+          python daily_player_props.py
+
+      - name: Commit and Push Updated Data
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "Automated ML Pipeline: Updated daily CSVs and JSON predictions"
+          # This pattern looks everywhere in the repo for these files
+          file_pattern: "*.csv *.json *.pkl"
