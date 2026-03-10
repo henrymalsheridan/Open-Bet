@@ -53,8 +53,15 @@ def main():
     
     try:
         games = resp.json()
-    except:
-        print("Odds API failed.")
+        
+        # --- NEW SAFETY CHECK ---
+        # If the API returns an error dictionary instead of a list, catch it!
+        if not isinstance(games, list):
+            print(f"❌ Odds API Rejected Request: {games}")
+            return
+            
+    except Exception as e:
+        print(f"Odds API request completely failed: {e}")
         return
 
     # 3. TEAM PREDICTIONS (Win/Loss)
